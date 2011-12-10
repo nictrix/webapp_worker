@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+
+#require "bundler/setup"
+#require_relative "../lib/webapp_worker"
+#require_relative "../lib/webapp_worker/application"
+require 'webapp_worker'
+
+#WebappWorker::Application.new.run
+puts "works"
