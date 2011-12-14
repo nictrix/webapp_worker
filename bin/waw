@@ -1,9 +1,54 @@
 #!/usr/bin/env ruby
 
-#require "bundler/setup"
-#require_relative "../lib/webapp_worker"
-#require_relative "../lib/webapp_worker/application"
 require 'webapp_worker'
+require 'trollop'
 
-#WebappWorker::Application.new.run
-puts "works"
+opts = Trollop::options do
+  banner <<-EOS
+Usage:
+       #{File.basename($0)} [options]
+
+where [options] are:
+  EOS
+
+  opt :environment, "Enviroment (i.e. local, development..", :type => String
+  opt :job_file, "A YAML config file", :type => String
+  opt :run, "Run the jobs", :default => false
+  opt :jobs, "Run the jobs", :default => false
+  opt :next_run, "Find the next possible run time(s)", :type => Integer
+  opt :debug, "Local Debug"
+  opt :verbose, "Verbose Output"
+end
+Trollop::die :jobfile, "must specify job-file" unless opts[:job_file]
+Trollop::die :environment, "must specify environment" unless opts[:environment]
+
+job_file = File.absolute_path(opts[:job_file])
+
+a = WebappWorker::Application.new(environment:opts[:environment])
+a.parse_yaml(job_file)
+
+if opts[:next_run] != nil
+	puts "Next Run: #{a.next_command_run?(opts[:next_run])}"
+elsif opts[:run] == false && opts[:jobs] == false
+	puts "Job File: #{job_file}"
+	puts
+	puts "Host: #{a.hostname}"
+	puts "Mailto: #{a.mailto}"
+	puts "Environment: #{a.environment}"
+	puts "Amount of Jobs: #{a.jobs.length}"
+elsif opts[:run] == false && opts[:jobs] == true
+	puts "Job File: #{job_file}"
+	puts
+	puts "Host: #{a.hostname}"
+	puts "Mailto: #{a.mailto}"
+	puts "Environment: #{a.environment}"
+	puts "Amount of Jobs: #{a.jobs.length}"
+	puts
+	a.jobs.each do |job|
+		j = WebappWorker::Job.new(job)
+		puts "Command to Run: #{j.command}"
+		puts "   Next Run: #{j.next_run?}"
+	end
+else
+	puts "Running"
+end

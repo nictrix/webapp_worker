@@ -1,6 +1,29 @@
+require 'socket'
+
 module WebappWorker
 	class Application
-		def run
+		attr_accessor :hostname, :mailto, :environment, :jobs
+
+		def initialize(user_supplied_hash={})
+			standard_hash = { hostname:"#{self.hostname}", mailto:"", environment:"local", jobs:"" }
+
+			user_supplied_hash = {} unless user_supplied_hash
+			user_supplied_hash = standard_hash.merge(user_supplied_hash)
+
+			user_supplied_hash.each do |key,value|
+				self.instance_variable_set("@#{key}", value)
+				self.class.send(:define_method, key, proc{self.instance_variable_get("@#{key}")})
+				self.class.send(:define_method, "#{key}=", proc{|x| self.instance_variable_set("@#{key}", x)})
+			end
+		end
+
+		def parse_yaml(yaml)
+			@mailto = (YAML.load_file(yaml))[@environment]["mailto"]
+			@jobs = (YAML.load_file(yaml))[@environment][@hostname]
+		end
+
+		def hostname
+			return Socket.gethostname.downcase
 		end
 	end
 end

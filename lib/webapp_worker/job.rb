@@ -1,4 +1,5 @@
 require 'yaml'
+require 'time'
 
 #need to implement a range for each instance variable
 #
@@ -26,6 +27,7 @@ module WebappWorker
 		def initialize(user_supplied_hash={})
 			standard_hash = { command:"", minute:"*", hour:"*", day:"*", month:"*", weekday:"*" }
 
+			user_supplied_hash = {} unless user_supplied_hash
 			user_supplied_hash = standard_hash.merge(user_supplied_hash)
 
 			user_supplied_hash.each do |key,value|
@@ -37,8 +39,8 @@ module WebappWorker
 			self.parse_datetime
 		end
 
-		def self.new_from_yaml(yaml)
-			job = self.new(YAML.load(yaml))
+		def self.new_from_yaml(yaml,environment)
+			job = self.new((YAML.load_file(yaml))[environment])
 		end
 
 		def current_time
@@ -154,6 +156,22 @@ module WebappWorker
 			end
 		end
 
+		def next_times(numbers,amount,time)
+			future = {}
+
+			numbers.each do |number|
+				calculated = number.to_i - time
+				calculated = (calculated + amount) unless calculated >= 0
+				future.store(number,calculated)
+			end
+
+			sub = {}
+			(future.sort_by { |key,value| value }).collect { |key,value| sub.store(key,value) }
+			fn = sub.collect { |key,value| key }
+
+			return fn
+		end
+
 		def next_run?
 			self.next_runs?(1)
 		end
@@ -161,46 +179,42 @@ module WebappWorker
 		def next_runs?(til)
 			self.parse_datetime
 
-			possible_times = []
 			next_runs = []
 
 			now = Time.now
-			weekday_now = now.strftime("%w")
-			year_now = now.strftime("%Y")
-			month_now = now.strftime("%m")
-			day_now = now.strftime("%d")
-			hour_now = now.strftime("%H")
-			minute_now = now.strftime("%M")
+			@weekday = self.next_times(@weekday,6,now.strftime("%w").to_i)
+			@year = now.strftime("%Y")
+			@month = self.next_times(@month,12,now.strftime("%m").to_i)
+			@day = self.next_times(@day,31,now.strftime("%d").to_i)
+			@hour = self.next_times(@hour,23,now.strftime("%H").to_i)
+			@minute = self.next_times(@minute,60,now.strftime("%M").to_i)
 
-			
+			counter = 0
+			catch :done do
+				@month.each do |month|
+					@day.each do |day|
+						@weekday.each do |weekday|
+							@hour.each do |hour|
+								@minute.each do |minute|
+									begin
+										next_time = (DateTime.strptime("#{weekday} #{@year}-#{month}-#{day} #{hour}:#{minute}","%w %Y-%m-%d %H:%M")).to_time + 25200
 
-			@month.each do |month|
-				@day.each do |day|
-					@weekday.each do |weekday|
-						@hour.each do |hour|
-							@minute.each do |minute|
-								begin
-									possible_times << (DateTime.strptime("#{weekday} #{year_now}-#{month}-#{day} #{hour}:#{minute}","%w %Y-%m-%d %H:%M")).to_time
-								rescue ArgumentError
-									next
+										next unless next_time >= now
+										next_runs << next_time
+										counter = counter + 1
+									rescue ArgumentError
+										next
+									end
+
+									throw :done, next_runs if counter >= til
 								end
 							end
 						end
 					end
 				end
+
+				return next_runs
 			end
-
-			counter = 0
-			possible_times.uniq.sort.each do |time|
-				if time >= now
-					counter = counter + 1
-					break if counter > til
-
-					next_runs << time
-				end
-			end
-
-			return next_runs
 		end
 	end
 end
