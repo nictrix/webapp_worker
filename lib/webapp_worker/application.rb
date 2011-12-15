@@ -48,6 +48,7 @@ module WebappWorker
 		end
 
 		def run
+			#Going to need to do memory/process management, or fork processes not threads...
 			p = Process.fork do
 				Signal.trap('HUP', 'IGNORE')
 
