@@ -54,5 +54,5 @@ elsif opts[:run] == false && opts[:jobs] == true
 	end
 else
 	puts "Running Jobs"
-	#a.run
+	a.run
 end

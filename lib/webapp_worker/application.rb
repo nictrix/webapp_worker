@@ -47,10 +47,19 @@ module WebappWorker
 			return next_commands
 		end
 
-		#Got to make it it's own process, but needs to check for itself before starting again
 		def run
-			t = Thread.new do
+			p = Process.fork do
+				Signal.trap('HUP', 'IGNORE')
+
+				@threads = {}
+
 				loop do
+					@threads.each do |thread,command|
+						if thread.status == false
+							@threads.delete(thread)
+						end
+					end
+
 					data = self.next_command_run?(1)
 
 					data.each do |command,time|
@@ -58,15 +67,20 @@ module WebappWorker
 						now = Time.now.utc
 						range = (time - now).to_i
 
-						if range < 20
-							p = fork { `#{command}` }
-							Process.wait(p)
-						else
+						if @threads.detect { |thr,com| com == command }
 							sleep(range) unless range <= 0
+						else
+							t = Thread.new do
+								sleep(range) unless range <= 0
+								`#{command}`
+							end
+							@threads.store(t,command)
 						end
 					end
 				end
 			end
+
+			Process.detach(p)
 		end
 
 	end
