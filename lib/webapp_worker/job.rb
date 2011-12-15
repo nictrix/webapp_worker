@@ -1,22 +1,6 @@
 require 'yaml'
 require 'time'
 
-#need to implement a range for each instance variable
-#
-#class Module
-#  def minute_range( key, range=0..59 )
-#		define_method(:"#{key}=") do |value|
-#			if range.include?( value )
-#				self.instance_variable_set("@#{key}", value)
-#				self.class.send(:define_method, key, proc{self.instance_variable_get("@#{key}")})
-#				self.class.send(:define_method, "#{key}=", proc{|x| self.instance_variable_set("@#{key}", x)})
-#			else
-#				raise "Minute Out of Range (0..59)"
-#			end
-#		end
-#  end
-#end
-
 module WebappWorker
 	class Job
 		attr_accessor :command, :minute, :hour, :day, :month, :weekday
@@ -217,19 +201,4 @@ module WebappWorker
 			end
 		end
 	end
-end
-
-if __FILE__ == $0
-	j = WebappWorker::Job.new
-	j.minute = 59
-	puts j.inspect
-	puts j.next_run?
-
-	j = WebappWorker::Job.new(command:"hostname",minute:"*",day:"0-16/3",month:7,weekday:2)
-	puts j.inspect
-	puts j.next_runs?(20)
-
-	j = WebappWorker::Job.new_from_yaml("--- \n:command: rake job:run\n:minute: 0-59/5\n:hour: 0-4/2\n:day: 1\n:month: 0-12/1\n")
-	puts j.inspect
-	puts j.next_runs?(14)
 end

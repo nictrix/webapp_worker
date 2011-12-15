@@ -18,27 +18,56 @@ module WebappWorker
 		end
 
 		def parse_yaml(yaml)
-			@mailto = (YAML.load_file(yaml))[@environment]["mailto"]
-			@jobs = (YAML.load_file(yaml))[@environment][@hostname]
+			@mailto = (YAML.load_file(yaml))[@environment]["mailto"] unless @mailto
+			@jobs = (YAML.load_file(yaml))[@environment][@hostname] unless @hostname.nil?
 		end
 
 		def hostname
 			return Socket.gethostname.downcase
 		end
+
+		def next_command_run?(til)
+			commands = {}
+			c = {}
+			next_commands = {}
+
+			@jobs.each do |job|
+				j = WebappWorker::Job.new(job)
+				commands.store(j.command,j.next_run?)
+			end
+			(commands.sort_by { |key,value| value }).collect { |key,value| c.store(key,value) }
+
+			counter = 0
+			c.each do |key,value|
+				next_commands.store(key,value)
+				counter = counter + 1
+				break if counter >= til
+			end
+
+			return next_commands
+		end
+
+		#Got to make it it's own process, but needs to check for itself before starting again
+		def run
+			t = Thread.new do
+				loop do
+					data = self.next_command_run?(1)
+
+					data.each do |command,time|
+						time = time[0]
+						now = Time.now.utc
+						range = (time - now).to_i
+
+						if range < 20
+							p = fork { `#{command}` }
+							Process.wait(p)
+						else
+							sleep(range) unless range <= 0
+						end
+					end
+				end
+			end
+		end
+
 	end
-end
-
-if __FILE__ == $0
-	j = WebappWorker::Job.new
-	j.minute = 59
-	puts j.inspect
-	puts j.next_run?
-
-	j = WebappWorker::Job.new(command:"hostname",minute:"*",day:"0-16/3",month:7,weekday:2)
-	puts j.inspect
-	puts j.next_runs?(20)
-
-	j = WebappWorker::Job.new_from_yaml("--- \n:command: rake job:run\n:minute: 0-59/5\n:hour: 0-4/2\n:day: 1\n:month: 0-12/1\n")
-	puts j.inspect
-	puts j.next_runs?(14)
 end
