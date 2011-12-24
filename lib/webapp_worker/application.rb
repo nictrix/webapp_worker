@@ -1,5 +1,18 @@
 require 'socket'
 
+module Process
+  class << self
+    def alive?(pid)
+      begin
+        Process.kill(0, pid)
+        true
+      rescue Errno::ESRCH
+        false
+      end
+    end
+  end
+end
+
 module WebappWorker
 	class Application
 		attr_accessor :hostname, :mailto, :environment, :jobs
@@ -47,9 +60,45 @@ module WebappWorker
 			return next_commands
 		end
 
+		def check_for_directory
+			dir = "/tmp/webapp_worker"
+
+			if Dir.exists?(dir)
+			else
+				Dir.mkdir(dir, 0700)
+			end
+		end
+
+		def create_pid
+			pid_file = File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
+			pid_file.close
+		end
+
+		def check_for_process
+			self.check_for_directory
+
+			file = "/tmp/webapp_worker/waw.pid"
+
+			if File.exists?(file)
+				possible_pid = ""
+				pid_file = File.open(file, 'r').each { |f| possible_pid+= f }
+				pid_file.close
+
+				if Process.alive?(possible_pid)
+				else
+					self.create_pid
+				end
+			end
+		end
+
 		def run
 			#Going to need to do memory/process management, or fork processes not threads...
 			p = Process.fork do
+				self.check_for_process
+
+				logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
+				logger.level = Logger::INFO
+
 				Signal.trap('HUP', 'IGNORE')
 
 				@threads = {}
