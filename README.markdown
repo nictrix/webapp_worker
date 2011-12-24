@@ -12,11 +12,36 @@ or use it in your Gemfile
 
 ## Quick Test
 
-``
+	waw -e development -f jobs.yml (parses data)
+	waw -e development -f jobs.yml  -j (parses and shows jobs)
+	waw -e development -f jobs.yml  -n 1 (parses and shows next X number of jobs that will run)
+	waw -e development -f jobs.yml -r (parses and starts to run)
 
 ## Using in your webapp
 
+Create a jobs yaml file.
 
+	---
+	development:
+		mailto:
+		server_host_name:
+			- :command: "rake job:run"
+				:minute: 0-59/5
+
+Load this file somewhere in your web app, like an initializer file.
+
+	jobs = "config/jobs.yml"
+
+	a = WebappWorker::Application.new(environment:"development",mailto:"")
+	a.parse_yaml(jobs)
+	a.run
+
+You don't have to use a jobs file, you can specify the yaml or hash in the code above like this:
+
+	job = {:command=>"rake job:run", :minute=>"0-59/5", :hour=>"0-4/2", :day=>1, :month=>"0-12/1"}
+
+	a = WebappWorker::Application.new(environment:"development",mailto:"",jobs:[job])
+	a.run
 
 ## Contributing
 
