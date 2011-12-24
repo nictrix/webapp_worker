@@ -43,6 +43,13 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 	a = WebappWorker::Application.new(environment:"development",mailto:"",jobs:[job])
 	a.run
 
+## Roadmap
+
+- Finish allowing the process to manage itself on the web application server
+- Start having the webapp worker registering to a central point
+- Once self registering is enabled, webapp_workers need to communicate effectively
+- Once communication is esatablished webapp_workers need to do the scheduling for themselves.
+
 ## Contributing
 
 - Fork the project and do your work in a topic branch.
