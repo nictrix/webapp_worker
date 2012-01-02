@@ -7,7 +7,7 @@ Gem::Specification.new do |s|
   s.version     = WebappWorker::VERSION
   s.authors     = ["Nick Willever"]
   s.email       = ["nickwillever@gmail.com"]
-  s.homepage    = ""
+  s.homepage    = "https://nictrix.github.com/webapp_worker"
   s.summary     = %q{Provides a worker for your webapp}
   s.description = %q{Allow the webapp to handle your workers, no need to use a job scheduler}
 
