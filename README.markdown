@@ -43,6 +43,35 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 	a = WebappWorker::Application.new(environment:"development",mailto:"",jobs:[job])
 	a.run
 
+## Example Output of waw
+
+	$ waw -e local -f config/jobs.yml -j
+	Job File: config/jobs.yml
+
+	Host: localhost
+	Mailto: 
+	Environment: development
+	Amount of Jobs: 9
+
+	Command to Run: rake job:pull FILTER=15902
+	   Next Run: [2012-01-03 22:00:00 -0700]
+	Command to Run: rake job:pull FILTER=15903
+	   Next Run: [2012-01-03 22:02:00 -0700]
+	Command to Run: rake job:pull FILTER=15908
+	   Next Run: [2012-01-03 21:12:00 -0700]
+	Command to Run: rake job:pull FILTER=15909
+	   Next Run: [2012-01-03 21:14:00 -0700]
+	Command to Run: rake job:pull FILTER=15910
+	   Next Run: [2012-01-03 21:16:00 -0700]
+	Command to Run: rake job:pull FILTER=15911
+	   Next Run: [2012-01-03 21:18:00 -0700]
+	Command to Run: rake job:pull FILTER=15913
+	   Next Run: [2012-01-03 21:22:00 -0700]
+	Command to Run: rake job:pull FILTER=15914
+	   Next Run: [2012-01-03 21:24:00 -0700]
+	Command to Run: rake job:pull FILTER=15918
+	   Next Run: [2012-01-03 21:30:00 -0700]
+
 ## Roadmap
 
 - Finish allowing the process to manage itself on the web application server
