@@ -1,10 +1,11 @@
 require 'socket'
+require 'logger'
 
 module Process
   class << self
     def alive?(pid)
       begin
-        Process.kill(0, pid)
+        Process.kill(0, pid.to_i)
         true
       rescue Errno::ESRCH
         false
@@ -69,14 +70,15 @@ module WebappWorker
 			end
 		end
 
-		def create_pid
-			pid_file = File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
-			pid_file.close
+		def create_pid(logger)
+			logger.info "Creating Pid File at /tmp/webapp_worker/waw.pid"
+
+			File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
+
+			logger.info "Pid File created: #{Process.pid} at /tmp/webapp_worker/waw.pid"
 		end
 
-		def check_for_process
-			self.check_for_directory
-
+		def check_for_process(logger)
 			file = "/tmp/webapp_worker/waw.pid"
 
 			if File.exists?(file)
@@ -85,27 +87,48 @@ module WebappWorker
 				pid_file.close
 
 				if Process.alive?(possible_pid)
+					puts "Already found webapp_worker running, pid is: #{possible_pid}, exiting..."
+					logger.fatal "Found webapp_worker already running with pid: #{possible_pid}, Pid File: #{file}, exiting..."
+					exit 1
 				else
-					self.create_pid
+					File.delete(file)
+					self.create_pid(logger)
 				end
+			else
+				self.create_pid(logger)
 			end
+
+			logger.info "Starting Webapp Worker"
 		end
 
 		def run
-			#Going to need to do memory/process management, or fork processes not threads...
+			self.check_for_directory
+
+			logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
+			logger.level = Logger::INFO
+
 			p = Process.fork do
-				self.check_for_process
-
-				logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
-				logger.level = Logger::INFO
-
-				Signal.trap('HUP', 'IGNORE')
+				begin
+					self.check_for_process(logger)
+				rescue => error
+					puts error.inspect
+					logger.fatal error.inspect
+				end
 
 				@threads = {}
 
-				loop do
+				stop_loop = false
+				Signal.trap('HUP', 'IGNORE')
+				Signal.trap('INT') do
+					stop_loop = true
+					logger.warn "Recieved an INT Signal, stopping loop. Check last log message, we may have to wait for that sleep!"
+				end
+
+				logger.info "Going into Loop"
+				until stop_loop
 					@threads.each do |thread,command|
 						if thread.status == false
+							logger.info "Deleting Old Thread from Array of Jobs"
 							@threads.delete(thread)
 						end
 					end
@@ -118,9 +141,11 @@ module WebappWorker
 						range = (time - now).to_i
 
 						if @threads.detect { |thr,com| com == command }
+							logger.info "Already found command in a thread: #{command}, sleeping for: #{range} seconds"
 							sleep(range) unless range <= 0
 						else
 							t = Thread.new do
+								logger.info "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
 								sleep(range) unless range <= 0
 								`#{command}`
 							end
