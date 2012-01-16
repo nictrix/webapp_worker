@@ -1,4 +1,6 @@
 require 'socket'
+require 'timeout'
+require 'open4'
 require 'logger'
 
 module Process
@@ -16,10 +18,10 @@ end
 
 module WebappWorker
 	class Application
-		attr_accessor :hostname, :mailto, :environment, :jobs
+		attr_accessor :hostname, :mailto, :environment, :jobs, :file, :file_mtime
 
 		def initialize(user_supplied_hash={})
-			standard_hash = { hostname:"#{self.hostname}", mailto:"", environment:"local", jobs:"" }
+			standard_hash = { hostname:"#{self.hostname}", mailto:"", environment:"local", jobs:"", file:"" }
 
 			user_supplied_hash = {} unless user_supplied_hash
 			user_supplied_hash = standard_hash.merge(user_supplied_hash)
@@ -32,8 +34,10 @@ module WebappWorker
 		end
 
 		def parse_yaml(yaml)
-			@mailto = (YAML.load_file(yaml))[@environment]["mailto"] unless @mailto
-			@jobs = (YAML.load_file(yaml))[@environment][@hostname] unless @hostname.nil?
+			@file = yaml
+			@file_mtime = File.mtime(@file)
+			@mailto = (YAML.load_file(@file))[@environment]["mailto"] unless @mailto
+			@jobs = (YAML.load_file(@file))[@environment][@hostname] unless @hostname.nil?
 		end
 
 		def hostname
@@ -61,6 +65,15 @@ module WebappWorker
 			return next_commands
 		end
 
+		def check_file_modification_time
+			mtime = File.mtime(@file)
+
+			if mtime != @file_mtime
+				@file_mtime = mtime
+
+			end
+		end
+
 		def check_for_directory
 			dir = "/tmp/webapp_worker"
 
@@ -74,6 +87,7 @@ module WebappWorker
 			logger.info "Creating Pid File at /tmp/webapp_worker/waw.pid"
 
 			File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
+			$0="Web App Worker - #{File.absolute_path(__FILE__)} - Job File: #{@file}"
 
 			logger.info "Pid File created: #{Process.pid} at /tmp/webapp_worker/waw.pid"
 		end
@@ -88,9 +102,10 @@ module WebappWorker
 
 				if Process.alive?(possible_pid)
 					puts "Already found webapp_worker running, pid is: #{possible_pid}, exiting..."
-					logger.fatal "Found webapp_worker already running with pid: #{possible_pid}, Pid File: #{file}, exiting..."
+					logger.fatal "Found webapp_worker already running with pid: #{possible_pid}, Pid File: #{file} exiting..."
 					exit 1
 				else
+					logger.warn "Found pid file, but no process running, recreating pid file with my pid: #{Process.pid}"
 					File.delete(file)
 					self.create_pid(logger)
 				end
@@ -99,6 +114,42 @@ module WebappWorker
 			end
 
 			logger.info "Starting Webapp Worker"
+		end
+
+		def graceful_termination(logger)
+			stop_loop = true
+
+			begin
+				logger.info "Graceful Termination started, waiting 60 seconds before KILL signal sent"
+
+				Timeout::timeout(60) do
+					@command_processes.each do |pid,command|
+						logger.info "Sending INT Signal to #{command} Process with PID: #{pid}"
+						Process.kill("INT",pid.to_i)
+					end
+
+					@threads.each do |thread,command|
+						thread.join
+					end
+				end
+			rescue Timeout::Error
+				logger.info "Timeout while trying joining threads, killing threads"
+
+				@command_processes.each do |pid,command|
+					logger.info "Killing #{command} Process with PID: #{pid}"
+					Process.kill("KILL",pid.to_i)
+				end
+
+				@threads.each do |thread,command|
+					logger.info "Killing Command Thread: #{command}"
+					Thread.kill(thread)
+				end
+			end
+
+			logger.info "Stopping Webapp Worker"
+			file = "/tmp/webapp_worker/waw.pid"
+			File.delete(file)
+			exit 0
 		end
 
 		def run
@@ -115,17 +166,35 @@ module WebappWorker
 					logger.fatal error.inspect
 				end
 
+				@command_processes = {}
 				@threads = {}
-
 				stop_loop = false
+
 				Signal.trap('HUP', 'IGNORE')
-				Signal.trap('INT') do
+
+				%w(INT QUIT TERM TSTP).each do |sig|
+					Signal.trap(sig) do
+						logger.warn "Recieved a #{sig} signal, stopping current commands."
+						self.graceful_termination(logger)
+					end
+				end
+
+				Signal.trap('STOP') do |s|
+					#Stop Looping until
 					stop_loop = true
-					logger.warn "Recieved an INT Signal, stopping loop. Check last log message, we may have to wait for that sleep!"
+					logger.warn "Recieved signal #{s}, pausing current loop."
+				end
+
+				Signal.trap('CONT') do
+					#Start Looping again (catch throw?)
+					stop_loop = false
+					logger.warn "Recieved signal #{s}, starting current loop."
 				end
 
 				logger.info "Going into Loop"
 				until stop_loop
+					logger.info @threads.inspect
+
 					@threads.each do |thread,command|
 						if thread.status == false
 							logger.info "Deleting Old Thread from Array of Jobs"
@@ -141,13 +210,34 @@ module WebappWorker
 						range = (time - now).to_i
 
 						if @threads.detect { |thr,com| com == command }
+							range = range + 1
 							logger.info "Already found command in a thread: #{command}, sleeping for: #{range} seconds"
 							sleep(range) unless range <= 0
 						else
 							t = Thread.new do
 								logger.info "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
 								sleep(range) unless range <= 0
-								`#{command}`
+								logger.info "Running Command: #{command}"
+
+								pid, stdin, stdout, stderr = Open4::popen4 command
+								@command_processes.store(pid,command)
+
+								ignored, status = Process::waitpid2 pid
+
+								if status.to_i == 0
+									logger.info "Completed Command: #{command}"
+								else
+									logger.fatal "Command: #{command} Failure! Exited with Status: #{status.to_i}, Standard Out and Error Below"
+									logger.fatal "STDOUT BELOW:"
+									stdout.each_line do |line|
+										logger.fatal line
+									end
+									logger.fatal "STDERR BELOW:"
+									stderr.each_line do |line|
+										logger.fatal line
+									end
+									logger.fatal "Command: #{command} Unable to Complete! Standard Out and Error Above"
+								end
 							end
 							@threads.store(t,command)
 						end
