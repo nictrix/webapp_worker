@@ -74,11 +74,11 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 
 ## Roadmap
 
-- Process needs to reload jobs file once in a while
-- Process also needs to understand when to die and to start back up
-- Start having the webapp worker registering to a central point
-- Once self registering is enabled, webapp_workers need to communicate effectively
+- Process also needs to understand when to die and to start back up. (new version being used in the web app server)
+- Start having the webapp worker registering to a central point or do UDP mutlicasting to find each other.
+- Once self registering is enabled, webapp_workers need to communicate effectively.
 - Once communication is esatablished webapp_workers need to do the scheduling for themselves.
+- Spit out reports of the different jobs and how fast they run.
 
 ## Contributing
 

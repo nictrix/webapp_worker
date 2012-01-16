@@ -44,7 +44,24 @@ module WebappWorker
 			return Socket.gethostname.downcase
 		end
 
-		def next_command_run?(til)
+		def next_command_run_time?
+			commands = {}
+			c = {}
+
+			@jobs.each do |job|
+				j = WebappWorker::Job.new(job)
+				commands.store(j.command,j.next_run?)
+			end
+			(commands.sort_by { |key,value| value }).collect { |key,value| c.store(key,value) }
+
+			c.each do |key,value|
+				return value[0]
+			end
+		end
+
+		def commands_to_run
+			self.check_file_modification_time
+
 			commands = {}
 			c = {}
 			next_commands = {}
@@ -55,11 +72,8 @@ module WebappWorker
 			end
 			(commands.sort_by { |key,value| value }).collect { |key,value| c.store(key,value) }
 
-			counter = 0
 			c.each do |key,value|
 				next_commands.store(key,value)
-				counter = counter + 1
-				break if counter >= til
 			end
 
 			return next_commands
@@ -70,7 +84,7 @@ module WebappWorker
 
 			if mtime != @file_mtime
 				@file_mtime = mtime
-
+				self.parse_yaml(@file)
 			end
 		end
 
@@ -87,7 +101,7 @@ module WebappWorker
 			logger.info "Creating Pid File at /tmp/webapp_worker/waw.pid"
 
 			File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
-			$0="Web App Worker - #{File.absolute_path(__FILE__)} - Job File: #{@file}"
+			$0="Web App Worker - Job File: #{@file}"
 
 			logger.info "Pid File created: #{Process.pid} at /tmp/webapp_worker/waw.pid"
 		end
@@ -124,8 +138,11 @@ module WebappWorker
 
 				Timeout::timeout(60) do
 					@command_processes.each do |pid,command|
-						logger.info "Sending INT Signal to #{command} Process with PID: #{pid}"
-						Process.kill("INT",pid.to_i)
+						logger.debug "Sending INT Signal to #{command} Process with PID: #{pid}"
+						begin
+							Process.kill("INT",pid.to_i)
+						rescue => error
+						end
 					end
 
 					@threads.each do |thread,command|
@@ -136,12 +153,12 @@ module WebappWorker
 				logger.info "Timeout while trying joining threads, killing threads"
 
 				@command_processes.each do |pid,command|
-					logger.info "Killing #{command} Process with PID: #{pid}"
+					logger.debug "Killing #{command} Process with PID: #{pid}"
 					Process.kill("KILL",pid.to_i)
 				end
 
 				@threads.each do |thread,command|
-					logger.info "Killing Command Thread: #{command}"
+					logger.debug "Killing Command Thread: #{command}"
 					Thread.kill(thread)
 				end
 			end
@@ -156,7 +173,7 @@ module WebappWorker
 			self.check_for_directory
 
 			logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
-			logger.level = Logger::INFO
+			logger.level = Logger::DEBUG
 
 			p = Process.fork do
 				begin
@@ -191,18 +208,16 @@ module WebappWorker
 					logger.warn "Recieved signal #{s}, starting current loop."
 				end
 
-				logger.info "Going into Loop"
+				logger.debug "Going into Loop"
 				until stop_loop
-					logger.info @threads.inspect
-
 					@threads.each do |thread,command|
 						if thread.status == false
-							logger.info "Deleting Old Thread from Array of Jobs"
+							logger.debug "Deleting Old Thread from Array of Jobs"
 							@threads.delete(thread)
 						end
 					end
 
-					data = self.next_command_run?(1)
+					data = self.commands_to_run
 
 					data.each do |command,time|
 						time = time[0]
@@ -210,14 +225,12 @@ module WebappWorker
 						range = (time - now).to_i
 
 						if @threads.detect { |thr,com| com == command }
-							range = range + 1
-							logger.info "Already found command in a thread: #{command}, sleeping for: #{range} seconds"
-							sleep(range) unless range <= 0
+							data.delete(command)
 						else
 							t = Thread.new do
-								logger.info "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
+								logger.debug "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
 								sleep(range) unless range <= 0
-								logger.info "Running Command: #{command}"
+								logger.debug "Running Command: #{command}"
 
 								pid, stdin, stdout, stderr = Open4::popen4 command
 								@command_processes.store(pid,command)
@@ -225,7 +238,7 @@ module WebappWorker
 								ignored, status = Process::waitpid2 pid
 
 								if status.to_i == 0
-									logger.info "Completed Command: #{command}"
+									logger.debug "Completed Command: #{command}"
 								else
 									logger.fatal "Command: #{command} Failure! Exited with Status: #{status.to_i}, Standard Out and Error Below"
 									logger.fatal "STDOUT BELOW:"
@@ -242,6 +255,17 @@ module WebappWorker
 							@threads.store(t,command)
 						end
 					end
+
+					logger.debug Thread.list
+					logger.debug @threads.inspect
+					logger.debug @command_processes.inspect
+
+					time = self.next_command_run_time?
+					now = Time.now.utc
+					range = (time - now).to_i
+					range = range - 1
+					logger.debug "Sleeping for #{range} seconds after looping through all jobs found"
+					sleep(range) unless range <= 0
 				end
 			end
 
