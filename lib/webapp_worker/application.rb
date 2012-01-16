@@ -135,8 +135,8 @@ module WebappWorker
 
 			begin
 				puts
-				puts "Graceful Termination started, waiting 60 seconds before KILL signal sent"
-				logger.info "Graceful Termination started, waiting 60 seconds before KILL signal sent"
+				puts "Graceful Termination started, waiting 60 seconds before KILL signal send"
+				logger.info "Graceful Termination started, waiting 60 seconds before KILL signal send"
 
 				Timeout::timeout(60) do
 					@command_processes.each do |pid,command|
@@ -157,7 +157,10 @@ module WebappWorker
 
 				@command_processes.each do |pid,command|
 					logger.debug "Killing #{command} Process with PID: #{pid}"
-					Process.kill("KILL",pid.to_i)
+					begin
+						Process.kill("KILL",pid.to_i)
+					rescue => error
+					end
 				end
 
 				@threads.each do |thread,command|
