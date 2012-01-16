@@ -134,6 +134,8 @@ module WebappWorker
 			stop_loop = true
 
 			begin
+				puts
+				puts "Graceful Termination started, waiting 60 seconds before KILL signal sent"
 				logger.info "Graceful Termination started, waiting 60 seconds before KILL signal sent"
 
 				Timeout::timeout(60) do
@@ -150,7 +152,8 @@ module WebappWorker
 					end
 				end
 			rescue Timeout::Error
-				logger.info "Timeout while trying joining threads, killing threads"
+				puts "Graceful Termination bypassed, killing processes and threads"
+				logger.info "Graceful Termination bypassed, killing processes and threads"
 
 				@command_processes.each do |pid,command|
 					logger.debug "Killing #{command} Process with PID: #{pid}"
@@ -163,17 +166,25 @@ module WebappWorker
 				end
 			end
 
+			puts "Stopping Webapp Worker"
 			logger.info "Stopping Webapp Worker"
 			file = "/tmp/webapp_worker/waw.pid"
 			File.delete(file)
 			exit 0
 		end
 
-		def run
+		def run(debug=nil,verbose=nil)
 			self.check_for_directory
 
 			logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
-			logger.level = Logger::DEBUG
+
+			if debug
+				logger.level = Logger::DEBUG
+			elsif verbose
+				logger.level = Logger::INFO
+			else
+				logger.level = Logger::WARN
+			end
 
 			p = Process.fork do
 				begin
@@ -191,22 +202,36 @@ module WebappWorker
 
 				%w(INT QUIT TERM TSTP).each do |sig|
 					Signal.trap(sig) do
-						logger.warn "Recieved a #{sig} signal, stopping current commands."
+						logger.warn "Received a #{sig} signal, stopping current commands."
 						self.graceful_termination(logger)
 					end
 				end
 
-				Signal.trap('STOP') do |s|
-					#Stop Looping until
-					stop_loop = true
-					logger.warn "Recieved signal #{s}, pausing current loop."
+				Signal.trap('USR1') do
+					version = WebappWorker::VERSION
+					puts
+					puts "Webapp Worker Version: #{version}"
+					logger.info "Received USR1 signal, sent version: #{version}"
 				end
 
-				Signal.trap('CONT') do
-					#Start Looping again (catch throw?)
-					stop_loop = false
-					logger.warn "Recieved signal #{s}, starting current loop."
+				Signal.trap('USR2') do
+					logger.level = Logger::DEBUG
+					puts
+					puts "Changed logger level to Debug"
+					logger.info "Changed logger level to Debug"
 				end
+
+				#Signal.trap('STOP') do |s|
+				#	#Stop Looping until
+				#	stop_loop = true
+				#	logger.warn "Received signal #{s}, pausing current loop."
+				#end
+				#
+				#Signal.trap('CONT') do
+				#	#Start Looping again (catch throw?)
+				#	stop_loop = false
+				#	logger.warn "Received signal #{s}, starting current loop."
+				#end
 
 				logger.debug "Going into Loop"
 				until stop_loop
