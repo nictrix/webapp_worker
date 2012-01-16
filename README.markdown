@@ -49,32 +49,33 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 	Job File: config/jobs.yml
 
 	Host: localhost
-	Mailto: 
+	Mailto:
 	Environment: development
 	Amount of Jobs: 9
 
-	Command to Run: rake job:pull FILTER=15902
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 22:00:00 -0700]
-	Command to Run: rake job:pull FILTER=15903
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 22:02:00 -0700]
-	Command to Run: rake job:pull FILTER=15908
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:12:00 -0700]
-	Command to Run: rake job:pull FILTER=15909
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:14:00 -0700]
-	Command to Run: rake job:pull FILTER=15910
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:16:00 -0700]
-	Command to Run: rake job:pull FILTER=15911
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:18:00 -0700]
-	Command to Run: rake job:pull FILTER=15913
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:22:00 -0700]
-	Command to Run: rake job:pull FILTER=15914
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:24:00 -0700]
-	Command to Run: rake job:pull FILTER=15918
+	Command to Run: rake job:run
 	   Next Run: [2012-01-03 21:30:00 -0700]
 
 ## Roadmap
 
-- Finish allowing the process to manage itself on the web application server
+- Process needs to reload jobs file once in a while
+- Process also needs to understand when to die and to start back up
 - Start having the webapp worker registering to a central point
 - Once self registering is enabled, webapp_workers need to communicate effectively
 - Once communication is esatablished webapp_workers need to do the scheduling for themselves.
