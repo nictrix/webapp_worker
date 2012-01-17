@@ -1,20 +1,8 @@
 require 'socket'
 require 'timeout'
 require 'open4'
+require 'drb'
 require 'logger'
-
-module Process
-  class << self
-    def alive?(pid)
-      begin
-        Process.kill(0, pid.to_i)
-        true
-      rescue Errno::ESRCH
-        false
-      end
-    end
-  end
-end
 
 module WebappWorker
 	class Application
@@ -42,6 +30,15 @@ module WebappWorker
 
 		def hostname
 			return Socket.gethostname.downcase
+		end
+
+		def check_file_modification_time
+			mtime = File.mtime(@file)
+
+			if mtime != @file_mtime
+				@file_mtime = mtime
+				self.parse_yaml(@file)
+			end
 		end
 
 		def next_command_run_time?
@@ -79,57 +76,6 @@ module WebappWorker
 			return next_commands
 		end
 
-		def check_file_modification_time
-			mtime = File.mtime(@file)
-
-			if mtime != @file_mtime
-				@file_mtime = mtime
-				self.parse_yaml(@file)
-			end
-		end
-
-		def check_for_directory
-			dir = "/tmp/webapp_worker"
-
-			if Dir.exists?(dir)
-			else
-				Dir.mkdir(dir, 0700)
-			end
-		end
-
-		def create_pid(logger)
-			logger.info "Creating Pid File at /tmp/webapp_worker/waw.pid"
-
-			File.open("/tmp/webapp_worker/waw.pid", 'w') { |f| f.write(Process.pid) }
-			$0="Web App Worker - Job File: #{@file}"
-
-			logger.info "Pid File created: #{Process.pid} at /tmp/webapp_worker/waw.pid"
-		end
-
-		def check_for_process(logger)
-			file = "/tmp/webapp_worker/waw.pid"
-
-			if File.exists?(file)
-				possible_pid = ""
-				pid_file = File.open(file, 'r').each { |f| possible_pid+= f }
-				pid_file.close
-
-				if Process.alive?(possible_pid)
-					puts "Already found webapp_worker running, pid is: #{possible_pid}, exiting..."
-					logger.fatal "Found webapp_worker already running with pid: #{possible_pid}, Pid File: #{file} exiting..."
-					exit 1
-				else
-					logger.warn "Found pid file, but no process running, recreating pid file with my pid: #{Process.pid}"
-					File.delete(file)
-					self.create_pid(logger)
-				end
-			else
-				self.create_pid(logger)
-			end
-
-			logger.info "Starting Webapp Worker"
-		end
-
 		def graceful_termination(logger)
 			stop_loop = true
 
@@ -141,9 +87,9 @@ module WebappWorker
 				Timeout::timeout(60) do
 					@command_processes.each do |pid,command|
 						logger.debug "Sending INT Signal to #{command} Process with PID: #{pid}"
-						begin
+
+						if WebappWorker::System.process_alive?(pid)
 							Process.kill("INT",pid.to_i)
-						rescue => error
 						end
 					end
 
@@ -177,25 +123,11 @@ module WebappWorker
 		end
 
 		def run(debug=nil,verbose=nil)
-			self.check_for_directory
-
-			logger = Logger.new("/tmp/webapp_worker/#{@environment}.log", 5, 5242880)
-
-			if debug
-				logger.level = Logger::DEBUG
-			elsif verbose
-				logger.level = Logger::INFO
-			else
-				logger.level = Logger::WARN
-			end
-
 			p = Process.fork do
-				begin
-					self.check_for_process(logger)
-				rescue => error
-					puts error.inspect
-					logger.fatal error.inspect
-				end
+				$0="Web App Worker - Job File: #{@file}"
+				waw_system = WebappWorker.new
+				waw_system.setup(debug,verbose)
+				logger = waw_system.logger
 
 				@command_processes = {}
 				@threads = {}
@@ -223,18 +155,6 @@ module WebappWorker
 					puts "Changed logger level to Debug"
 					logger.info "Changed logger level to Debug"
 				end
-
-				#Signal.trap('STOP') do |s|
-				#	#Stop Looping until
-				#	stop_loop = true
-				#	logger.warn "Received signal #{s}, pausing current loop."
-				#end
-				#
-				#Signal.trap('CONT') do
-				#	#Start Looping again (catch throw?)
-				#	stop_loop = false
-				#	logger.warn "Received signal #{s}, starting current loop."
-				#end
 
 				logger.debug "Going into Loop"
 				until stop_loop
