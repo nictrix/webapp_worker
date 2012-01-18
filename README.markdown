@@ -87,6 +87,7 @@ You may need to turn on debugging for the Webapp Worker while its running, so ju
 
 ## Roadmap
 
+- Start creating tests
 - Use the mailto attribute in application to actually do something
 - Start having the webapp worker registering to a central point or do UDP mutlicasting to find each other.
 - Once self registering is enabled, webapp_workers need to communicate effectively.
