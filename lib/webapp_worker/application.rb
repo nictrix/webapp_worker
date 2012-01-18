@@ -1,8 +1,6 @@
 require 'socket'
 require 'timeout'
 require 'open4'
-require 'drb'
-require 'logger'
 
 module WebappWorker
 	class Application
@@ -41,6 +39,35 @@ module WebappWorker
 			end
 		end
 
+		def next_command_run?(til)
+			commands = {}
+			c = {}
+			next_commands = {}
+			new_jobs = []
+
+			(0..til).each do |i|
+				@jobs.each do |j|
+					new_jobs << j
+				end
+			end
+
+			new_jobs.flatten.each do |job|
+				j = WebappWorker::Job.new(job)
+				commands.store(j.command,j.next_runs?(til))
+			end
+
+			(commands.sort_by { |key,value| value }).collect { |key,value| c.store(key,value) }
+
+			counter = 0
+			c.each do |key,value|
+				next_commands.store(key,value)
+				counter = counter + 1
+				break if counter >= @jobs.length
+			end
+
+			return next_commands
+		end
+
 		def next_command_run_time?
 			commands = {}
 			c = {}
@@ -76,85 +103,26 @@ module WebappWorker
 			return next_commands
 		end
 
-		def graceful_termination(logger)
-			stop_loop = true
-
-			begin
-				puts
-				puts "Graceful Termination started, waiting 60 seconds before KILL signal send"
-				logger.info "Graceful Termination started, waiting 60 seconds before KILL signal send"
-
-				Timeout::timeout(60) do
-					@command_processes.each do |pid,command|
-						logger.debug "Sending INT Signal to #{command} Process with PID: #{pid}"
-
-						if WebappWorker::System.process_alive?(pid)
-							Process.kill("INT",pid.to_i)
-						end
-					end
-
-					@threads.each do |thread,command|
-						thread.join
-					end
-				end
-			rescue Timeout::Error
-				puts "Graceful Termination bypassed, killing processes and threads"
-				logger.info "Graceful Termination bypassed, killing processes and threads"
-
-				@command_processes.each do |pid,command|
-					logger.debug "Killing #{command} Process with PID: #{pid}"
-					begin
-						Process.kill("KILL",pid.to_i)
-					rescue => error
-					end
-				end
-
-				@threads.each do |thread,command|
-					logger.debug "Killing Command Thread: #{command}"
-					Thread.kill(thread)
-				end
-			end
-
-			puts "Stopping Webapp Worker"
-			logger.info "Stopping Webapp Worker"
-			file = "/tmp/webapp_worker/waw.pid"
-			File.delete(file)
-			exit 0
-		end
-
 		def run(debug=nil,verbose=nil)
 			p = Process.fork do
-				$0="Web App Worker - Job File: #{@file}"
-				waw_system = WebappWorker.new
+				#Some Setup Work
+				$0="WebApp Worker - Job File: #{@file}"
+				waw_system = WebappWorker::System.new
 				waw_system.setup(debug,verbose)
 				logger = waw_system.logger
 
-				@command_processes = {}
-				@threads = {}
-				stop_loop = false
-
-				Signal.trap('HUP', 'IGNORE')
-
 				%w(INT QUIT TERM TSTP).each do |sig|
 					Signal.trap(sig) do
+						stop_loop = true
 						logger.warn "Received a #{sig} signal, stopping current commands."
-						self.graceful_termination(logger)
+						waw_system.graceful_termination(@threads,@command_processes)
 					end
 				end
 
-				Signal.trap('USR1') do
-					version = WebappWorker::VERSION
-					puts
-					puts "Webapp Worker Version: #{version}"
-					logger.info "Received USR1 signal, sent version: #{version}"
-				end
-
-				Signal.trap('USR2') do
-					logger.level = Logger::DEBUG
-					puts
-					puts "Changed logger level to Debug"
-					logger.info "Changed logger level to Debug"
-				end
+				#WebApp Worker is setup now do the real work
+				@command_processes = {}
+				@threads = {}
+				stop_loop = false
 
 				logger.debug "Going into Loop"
 				until stop_loop
@@ -182,6 +150,8 @@ module WebappWorker
 
 								pid, stdin, stdout, stderr = Open4::popen4 command
 								@command_processes.store(pid,command)
+
+								#make logger log to a specific job file log file
 
 								ignored, status = Process::waitpid2 pid
 
@@ -219,6 +189,5 @@ module WebappWorker
 
 			Process.detach(p)
 		end
-
 	end
 end

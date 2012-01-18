@@ -14,8 +14,10 @@ or use it in your Gemfile
 
 	waw -e development -f jobs.yml (parses data)
 	waw -e development -f jobs.yml  -j (parses and shows jobs)
-	waw -e development -f jobs.yml  -n 1 (parses and shows next X number of jobs that will run)
+	waw -e development -f jobs.yml  -n 4 (parses and shows the next N run times, by job)
 	waw -e development -f jobs.yml -r (parses and starts to run)
+	waw -e development -f jobs.yml -d (parses and turns on debugging)
+	waw -e development -f jobs.yml -v (parses and turns on verbose logging)
 
 ## Using in your webapp
 
@@ -45,39 +47,51 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 
 ## Example Output of waw
 
+See if Webapp Worker can parse the jobs file and show you all the jobs it can run form the file
+
 	$ waw -e local -f config/jobs.yml -j
 	Job File: config/jobs.yml
 
 	Host: localhost
 	Mailto:
 	Environment: development
-	Amount of Jobs: 9
+	Amount of Jobs: 3
 
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 22:00:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 22:02:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:12:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:14:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:16:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:18:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:22:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:24:00 -0700]
-	Command to Run: rake job:run
-	   Next Run: [2012-01-03 21:30:00 -0700]
+	Job: rake job:run
+	Job: rake job:run
+	Job: rake job:run
+
+See when the jobs are supposed to run next, next two times, next three times, etc...
+
+	$ waw -e local -f config/jobs.yml -n 4
+	Job: rake job:run
+	   Next Run Time(s): [2012-01-03 22:00:00 -0700, 2012-01-03 22:05:00 -0700, 2012-01-03 22:10:00 -0700, 2012-01-03 22:15:00 -0700]
+	Job: rake job:run
+	   Next Run Time(s): [2012-01-03 22:00:00 -0700, 2012-01-03 22:05:00 -0700, 2012-01-03 22:10:00 -0700, 2012-01-03 22:15:00 -0700]
+	Job: rake job:run
+
+	$ waw -e local -f config/jobs.yml -r (optional -d and -v for debug and verbose)
+	Running Jobs
+
+## Other Options
+
+You may want to know what version of the gem Webapp Worker is using, so just send a USR1 signal to it
+
+	$ kill -s USR1 11682
+	Webapp Worker Version: 0.0.3
+
+You may need to turn on debugging for the Webapp Worker while its running, so just send a USR2 signal to it
+
+	$ kill -s USR2 11682
+	Changed logger level to Debug
 
 ## Roadmap
 
-- Process also needs to understand when to die and to start back up. (new version being used in the web app server)
+- Use the mailto attribute in application to actually do something
 - Start having the webapp worker registering to a central point or do UDP mutlicasting to find each other.
 - Once self registering is enabled, webapp_workers need to communicate effectively.
 - Once communication is esatablished webapp_workers need to do the scheduling for themselves.
+- Do logging for each type of job in a jobs directory under tmp/webapp_worker, allowing for troubleshooting.
 - Spit out reports of the different jobs and how fast they run.
 
 ## Contributing

@@ -15,7 +15,7 @@ where [options] are:
   opt :jobfile, "A YAML config file", :type => String, :short => "-f"
   opt :run, "Run the jobs", :default => false, :short => "-r"
   opt :jobs, "Show the jobs", :default => false, :short => "-j"
-  opt :nextrun, "Find the next possible command(s) to run (i.e. 1,2...)", :type => Integer, :short => "-n"
+  opt :nextrun, "Find the next N run times, by job (use an integer)", :type => Integer, :short => "-n"
   opt :debug, "Local Debug", :short => "-d"
   opt :verbose, "Verbose Output", :short => "-v"
 end
@@ -30,8 +30,8 @@ a.parse_yaml(job_file)
 
 if opts[:nextrun] != nil
 	a.next_command_run?(opts[:nextrun]).each do |command,time|
-		puts "Next Command Run: #{command}"
-		puts "   Next Run: #{time}"
+		puts "Job: #{command}"
+		puts "   Next Run Time(s): #{time}"
 	end
 elsif opts[:run] == false && opts[:jobs] == false
 	puts
@@ -49,8 +49,7 @@ elsif opts[:run] == false && opts[:jobs] == true
 	puts
 	a.jobs.each do |job|
 		j = WebappWorker::Job.new(job)
-		puts "Command to Run: #{j.command}"
-		puts "   Next Run: #{j.next_run?}"
+		puts "Job: #{j.command}"
 	end
 else
 	puts "Running Jobs"
