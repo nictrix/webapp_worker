@@ -1,6 +1,6 @@
 ## Information
 
-Provides a way to have workers on your webapp servers, espeically useful for webapps that tend to scale up and down with X amount of servers in the load balancer.  Also good way to not use another dependent resource like a job scheduler/queue.  Keeps your application all packaged up nicely, no cron jobs to set, nothing else to think about setting up and nothing else to maintain.
+Provides a way to have workers on your webapp servers, especially useful for webapps that tend to scale up and down with X amount of servers in the load balancer.  Also good way to not use another dependent resource like a job scheduler/queue.  Keeps your application all packaged up nicely, no cron jobs to set, nothing else to think about setting up and nothing else to maintain.
 
 ## Installation
 
@@ -47,7 +47,7 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 
 ## Example Output of waw
 
-See if Webapp Worker can parse the jobs file and show you all the jobs it can run form the file
+See if Webapp Worker can parse the jobs file and show you all the jobs it can run from the file
 
 	$ waw -e local -f config/jobs.yml -j
 	Job File: config/jobs.yml
@@ -90,7 +90,7 @@ You may need to turn on debugging for the Webapp Worker while its running, so ju
 - Use the mailto attribute in application to actually do something
 - Start having the webapp worker registering to a central point or do UDP mutlicasting to find each other.
 - Once self registering is enabled, webapp_workers need to communicate effectively.
-- Once communication is esatablished webapp_workers need to do the scheduling for themselves.
+- Once communication is established webapp_workers need to do the scheduling for themselves.
 - Do logging for each type of job in a jobs directory under tmp/webapp_worker, allowing for troubleshooting.
 - Spit out reports of the different jobs and how fast they run.
 
