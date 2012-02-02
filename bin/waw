@@ -16,8 +16,8 @@ where [options] are:
   opt :run, "Run the jobs", :default => false, :short => "-r"
   opt :jobs, "Show the jobs", :default => false, :short => "-j"
   opt :nextrun, "Find the next N run times, by job (use an integer)", :type => Integer, :short => "-n"
-  opt :debug, "Local Debug", :short => "-d"
-  opt :verbose, "Verbose Output", :short => "-v"
+  opt :debug, "Local Debug", :default => false, :short => "-d"
+  opt :verbose, "Verbose Output", :default => false, :short => "-v"
 end
 
 Trollop::die :jobfile, "must specify jobfile" unless File.exist?(opts[:jobfile]) if opts[:jobfile]

@@ -75,14 +75,14 @@ module WebappWorker
       @logger.fatal "Deleting both PID and IPC files"
 
       begin
-				File.delete(@pid_file)
+				File.delete(@pid_file) if File.exists?(@pid_file)
         @logger.fatal "Deleted PID File: #{@pid_file}"
       rescue => error
         @logger.fatal "Error at Deleting PID File: #{@pid_file}: #{error}"
       end
 
       begin
-				File.delete(@ipc_file)
+				File.delete(@ipc_file) if File.exists?(@ipc_file)
         @logger.fatal "Deleted IPC File: #{@ipc_file}"
       rescue => error
         @logger.fatal "Error at Deleting IPC File: #{@ipc_file}: #{error}"
@@ -92,9 +92,13 @@ module WebappWorker
 		def create_pid
       self.delete_files
 
-			@logger.info "Creating Pid File at #{@pid_file}"
-			File.open(@pid_file, 'w') { |f| f.write(Process.pid) }
-			@logger.info "Pid File created: #{Process.pid} at #{@pid_file}"
+			begin
+				@logger.info "Creating Pid File at #{@pid_file}"
+				File.open(@pid_file, 'w') { |f| f.write(Process.pid) }
+				@logger.info "Pid File created: #{Process.pid} at #{@pid_file}"
+			rescue => error
+				@logger.fatal "Error creating PID file: #{error}"
+			end
 		end
 
 		def check_for_process
@@ -141,11 +145,13 @@ module WebappWorker
 		end
 
 		def start_listening
-			@logger.info "Starting to listen on IPC: #{@ipc_file}"
-
-			DRb.start_service("drbunix:#{@ipc_file}", WebappWorker::VERSION)
-
-			@logger.info "Now listenting on IPC: #{@ipc_file}"
+			begin
+				@logger.info "Starting to listen on IPC: #{@ipc_file}"
+				DRb.start_service("drbunix:#{@ipc_file}", WebappWorker::VERSION)
+				@logger.info "Now listenting on IPC: #{@ipc_file}"
+			rescue => error
+				@logger.fatal "Error at IPC Start Listenting: #{error}"
+			end
 		end
 
 		def check_process_version

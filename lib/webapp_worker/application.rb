@@ -4,10 +4,10 @@ require 'open4'
 
 module WebappWorker
 	class Application
-		attr_accessor :hostname, :mailto, :environment, :jobs, :file, :file_mtime
+		attr_accessor :hostname, :mailto, :environment, :jobs, :file, :file_mtime, :pid
 
 		def initialize(user_supplied_hash={})
-			standard_hash = { hostname:"#{self.hostname}", mailto:"", environment:"local", jobs:"", file:"" }
+			standard_hash = { hostname:"#{self.hostname}", mailto:nil, environment:"local", jobs:"", file:nil, file_mtime:nil, pid:nil }
 
 			user_supplied_hash = {} unless user_supplied_hash
 			user_supplied_hash = standard_hash.merge(user_supplied_hash)
@@ -21,7 +21,7 @@ module WebappWorker
 
 		def parse_yaml(yaml)
 			@file = yaml
-			@file_mtime = File.mtime(@file)
+			@file_mtime = File.mtime(@file) if File.exists?(@file)
 			@mailto = (YAML.load_file(@file))[@environment]["mailto"] unless @mailto
 
 			begin
@@ -36,11 +36,13 @@ module WebappWorker
 		end
 
 		def check_file_modification_time
-			mtime = File.mtime(@file)
+			if @file != nil
+				mtime = File.mtime(@file) if File.exists?(@file)
 
-			if mtime != @file_mtime
-				@file_mtime = mtime
-				self.parse_yaml(@file)
+				if mtime != @file_mtime
+					@file_mtime = mtime
+					self.parse_yaml(@file)
+				end
 			end
 		end
 
@@ -108,10 +110,20 @@ module WebappWorker
 			return next_commands
 		end
 
+		#On demand when the application needs to shell out, use webapp worker instead for consistency
+		def add_job(job={})
+			job_hash = { command:"", minute:"", hour:"", day:"", month:"" }
+
+			job = {} unless job
+			job = job_hash.merge(job)
+
+			@jobs << job
+		end
+
 		def run(debug=nil,verbose=nil)
 			p = Process.fork do
 				#Some Setup Work
-				$0="WebApp Worker - Job File: #{@file}"
+				$0="WebApp Worker - Job File: #{@file || 'No File'}"
 				waw_system = WebappWorker::System.new
 				waw_system.setup(debug,verbose)
 				logger = waw_system.logger
@@ -187,11 +199,23 @@ module WebappWorker
 					now = Time.now.utc
 					range = (time - now).to_i
 					range = range - 1
-					logger.debug "Sleeping for #{range} seconds after looping through all jobs found"
-					sleep(range) unless range <= 0
+					#logger.debug "Sleeping for #{range} seconds after looping through all jobs found"
+					#sleep(range) unless range <= 0
+
+					logger.debug "Checking for on demand jobs, already looped through all jobs found"
+					while range > 0 do
+						range_time = Time.now.to_f
+						range = range - 1
+
+						#DO some checks on new jobs & run them too - DRb etc..
+
+						time_to_sleep = Time.now.to_f - range_time
+						sleep(time_to_sleep) unless time_to_sleep < 0
+					end
 				end
 			end
 
+			@pid = p.to_i
 			Process.detach(p)
 		end
 	end
