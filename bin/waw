@@ -29,8 +29,9 @@ a = WebappWorker::Application.new(environment:opts[:environment])
 a.parse_yaml(job_file)
 
 if opts[:nextrun] != nil
+	puts
 	a.next_command_run?(opts[:nextrun]).each do |command,time|
-		puts "Job: #{command}"
+		puts "Job: `#{command}`"
 		puts "   Next Run Time(s): #{time}"
 	end
 elsif opts[:run] == false && opts[:jobs] == false
@@ -38,20 +39,21 @@ elsif opts[:run] == false && opts[:jobs] == false
 	puts "Host: #{a.hostname}"
 	puts "Mailto: #{a.mailto}"
 	puts "Environment: #{a.environment}"
-	puts "Amount of Jobs: #{a.jobs.length}"
+	puts "Amount of Jobs for Host: #{a.jobs.length rescue 0}"
 elsif opts[:run] == false && opts[:jobs] == true
 	puts "Job File: #{job_file}"
 	puts
 	puts "Host: #{a.hostname}"
 	puts "Mailto: #{a.mailto}"
 	puts "Environment: #{a.environment}"
-	puts "Amount of Jobs: #{a.jobs.length}"
+	puts "Amount of Jobs for Host: #{a.jobs.length rescue 0}"
 	puts
 	a.jobs.each do |job|
 		j = WebappWorker::Job.new(job)
-		puts "Job: #{j.command}"
+		puts "Job: `#{j.command}`"
 	end
 else
+	puts
 	puts "Running Jobs"
 	a.run(opts[:debug],opts[:verbose])
 end

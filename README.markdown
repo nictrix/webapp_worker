@@ -24,11 +24,13 @@ or use it in your Gemfile
 Create a jobs yaml file.
 
 	---
-	development:
-		mailto:
-		server_host_name:
-			- :command: "rake job:run"
-				:minute: 0-59/5
+	local:
+		mailto: user@nobody.com
+		actual_hostname:
+			- :command: "rake test"
+				:minute: 0
+			- :command: "rake test"
+				:minute: 45
 
 Load this file somewhere in your web app, like an initializer file.
 

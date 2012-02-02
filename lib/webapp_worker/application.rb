@@ -23,7 +23,12 @@ module WebappWorker
 			@file = yaml
 			@file_mtime = File.mtime(@file)
 			@mailto = (YAML.load_file(@file))[@environment]["mailto"] unless @mailto
-			@jobs = (YAML.load_file(@file))[@environment][@hostname] unless @hostname.nil?
+
+			begin
+				@jobs = (YAML.load_file(@file))[@environment][@hostname] unless @hostname.nil?
+			rescue => error
+				puts error
+			end
 		end
 
 		def hostname
