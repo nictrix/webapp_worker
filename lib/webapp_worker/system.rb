@@ -72,18 +72,18 @@ module WebappWorker
     end
 
     def delete_files
-      @logger.fatal "Deleting both PID and IPC files"
+      @logger.info "Deleting both PID and IPC files"
 
       begin
 				File.delete(@pid_file) if File.exists?(@pid_file)
-        @logger.fatal "Deleted PID File: #{@pid_file}"
+        @logger.info "Deleted PID File: #{@pid_file}"
       rescue => error
         @logger.fatal "Error at Deleting PID File: #{@pid_file}: #{error}"
       end
 
       begin
 				File.delete(@ipc_file) if File.exists?(@ipc_file)
-        @logger.fatal "Deleted IPC File: #{@ipc_file}"
+        @logger.info "Deleted IPC File: #{@ipc_file}"
       rescue => error
         @logger.fatal "Error at Deleting IPC File: #{@ipc_file}: #{error}"
       end
@@ -148,9 +148,9 @@ module WebappWorker
 			begin
 				@logger.info "Starting to listen on IPC: #{@ipc_file}"
 				DRb.start_service("drbunix:#{@ipc_file}", WebappWorker::VERSION)
-				@logger.info "Now listenting on IPC: #{@ipc_file}"
+				@logger.info "Now listening on IPC: #{@ipc_file}"
 			rescue => error
-				@logger.fatal "Error at IPC Start Listenting: #{error}"
+				@logger.fatal "Error at IPC Start Listening: #{error}"
 			end
 		end
 

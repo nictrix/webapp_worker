@@ -1,6 +1,7 @@
 require 'socket'
 require 'timeout'
 require 'open4'
+require 'drb'
 
 module WebappWorker
 	class Application
@@ -110,14 +111,54 @@ module WebappWorker
 			return next_commands
 		end
 
-		#On demand when the application needs to shell out, use webapp worker instead for consistency
-		def add_job(job={})
-			job_hash = { command:"", minute:"", hour:"", day:"", month:"" }
+		def run_job(job=nil)
+			ipc_file = "/tmp/webapp_worker/jobs"
 
-			job = {} unless job
-			job = job_hash.merge(job)
+			if job
+				begin
+					on_demand_jobs = DRbObject.new(nil,"drbunix:#{ipc_file}")
+					on_demand_jobs << job
+					puts "Sent on demand job"
+				rescue => error
+					puts "Error sending new job: #{error}"
+				end
+			end
+		end
 
-			@jobs << job
+		def self.run_command(time,command,logger)
+			now = Time.now.utc
+			range = (time - now).to_i
+			@pid = ""
+
+			t = Thread.new do
+				logger.debug "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
+				sleep(range) unless range <= 0
+				logger.debug "Running Command: #{command}"
+
+				pid, stdin, stdout, stderr = Open4::popen4 command
+				@pid = pid
+
+				#make logger log to a specific job file log file
+
+				ignored, status = Process::waitpid2 pid
+
+				if status.to_i == 0
+					logger.debug "Completed Command: #{command}"
+				else
+					logger.fatal "Command: #{command} Failure! Exited with Status: #{status.to_i}, Standard Out and Error Below"
+					logger.fatal "STDOUT BELOW:"
+					stdout.each_line do |line|
+						logger.fatal line
+					end
+					logger.fatal "STDERR BELOW:"
+					stderr.each_line do |line|
+						logger.fatal line
+					end
+					logger.fatal "Command: #{command} Unable to Complete! Standard Out and Error Above"
+				end
+			end
+
+			return t, @pid
 		end
 
 		def run(debug=nil,verbose=nil)
@@ -133,6 +174,27 @@ module WebappWorker
 						stop_loop = true
 						logger.warn "Received a #{sig} signal, stopping current commands."
 						waw_system.graceful_termination(@threads,@command_processes)
+					end
+				end
+
+				Thread.new do
+					ipc_file = "/tmp/webapp_worker/jobs"
+					@on_demand_commands = []
+					begin
+						logger.info "Starting to listen on IPC for New Application Jobs: #{ipc_file}"
+						DRb.start_service("drbunix:#{ipc_file}", @on_demand_commands)
+						logger.info "Now listening on IPC: #{ipc_file}"
+					rescue => error
+						logger.fatal "Error at New Application Jobs IPC Start Listening: #{error}"
+					end
+
+					loop do
+						if @on_demand_commands
+							@on_demand_commands.each do |c|
+								Application.run_command(Time.now,c,logger)
+								@on_demand_commands.delete_at(c)
+							end
+						end
 					end
 				end
 
@@ -153,41 +215,15 @@ module WebappWorker
 					data = self.commands_to_run
 
 					data.each do |command,time|
-						time = time[0]
-						now = Time.now.utc
-						range = (time - now).to_i
-
 						if @threads.detect { |thr,com| com == command }
 							data.delete(command)
 						else
-							t = Thread.new do
-								logger.debug "Creating New Thread for command: #{command} - may need to sleep for: #{range} seconds"
-								sleep(range) unless range <= 0
-								logger.debug "Running Command: #{command}"
+							run_command = Application.run_command(time[0],command,logger)
+							command_thread = run_command[0]
+							pid = run_command[1]
 
-								pid, stdin, stdout, stderr = Open4::popen4 command
-								@command_processes.store(pid,command)
-
-								#make logger log to a specific job file log file
-
-								ignored, status = Process::waitpid2 pid
-
-								if status.to_i == 0
-									logger.debug "Completed Command: #{command}"
-								else
-									logger.fatal "Command: #{command} Failure! Exited with Status: #{status.to_i}, Standard Out and Error Below"
-									logger.fatal "STDOUT BELOW:"
-									stdout.each_line do |line|
-										logger.fatal line
-									end
-									logger.fatal "STDERR BELOW:"
-									stderr.each_line do |line|
-										logger.fatal line
-									end
-									logger.fatal "Command: #{command} Unable to Complete! Standard Out and Error Above"
-								end
-							end
-							@threads.store(t,command)
+							@command_processes.store(pid,command)
+							@threads.store(command_thread,command)
 						end
 					end
 
@@ -199,19 +235,8 @@ module WebappWorker
 					now = Time.now.utc
 					range = (time - now).to_i
 					range = range - 1
-					#logger.debug "Sleeping for #{range} seconds after looping through all jobs found"
-					#sleep(range) unless range <= 0
-
-					logger.debug "Checking for on demand jobs, already looped through all jobs found"
-					while range > 0 do
-						range_time = Time.now.to_f
-						range = range - 1
-
-						#DO some checks on new jobs & run them too - DRb etc..
-
-						time_to_sleep = Time.now.to_f - range_time
-						sleep(time_to_sleep) unless time_to_sleep < 0
-					end
+					logger.debug "Sleeping for #{range} seconds after looping through all jobs found"
+					sleep(range) unless range <= 0
 				end
 			end
 

@@ -11,7 +11,7 @@ Usage:
 where [options] are:
   EOS
 
-  opt :environment, "Enviroment (i.e. local, development..)", :type => String, :short => "-e"
+  opt :environment, "Environment (i.e. local, development..)", :type => String, :short => "-e"
   opt :jobfile, "A YAML config file", :type => String, :short => "-f"
   opt :run, "Run the jobs", :default => false, :short => "-r"
   opt :jobs, "Show the jobs", :default => false, :short => "-j"
