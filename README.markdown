@@ -47,6 +47,10 @@ You don't have to use a jobs file, you can specify the yaml or hash in the code 
 	a = WebappWorker::Application.new(environment:"development",mailto:"",jobs:[job])
 	a.run
 
+You can go further with the above code and run additional "on demand jobs"
+
+	a.run_job("rake job:refresh_cache")
+
 ## Example Output of waw
 
 See if Webapp Worker can parse the jobs file and show you all the jobs it can run from the file
